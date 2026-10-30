@@ -1,0 +1,6 @@
+data:{"model":"deepseek-v4.1-flash","id":"","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":""}}],"created":1700000000}
+
+data:{"error":{"message":"The parameter `reasoning_effort` specified in the request are not valid: value `invalid_probe_value` is invalid. Request id: fixture-request-id","code":400,"type":"upstream_error"}}
+
+data:[DONE]
+

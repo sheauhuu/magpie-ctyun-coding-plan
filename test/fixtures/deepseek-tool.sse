@@ -1,0 +1,50 @@
+data:{"model":"deepseek-v4.1-flash","id":"","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":""}}],"created":1700000000}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning_content":""}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","reasoning_content":"The"}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","reasoning_content":" user wants"}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","reasoning_content":" me to call the"}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","reasoning_content":" lookup_test"}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","reasoning_content":"_code tool with key \"pro"}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","reasoning_content":"be-73\","}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","reasoning_content":" then output only the code"}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","reasoning_content":" value from the result."}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"call_fixture_0_0","index":0,"type":"function","function":{"name":"lookup_test_code","arguments":""}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"{"}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"\""}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"key"}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"\""}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":": "}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"\""}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"pro"}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"be"}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"-"}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"73"}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"\""}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","tool_calls":[{"id":"","index":0,"type":"","function":{"name":"","arguments":"}"}}]}}],"service_tier":"default"}
+
+data:{"id":"chatcmpl-fixture-deepseek-tool","object":"chat.completion.chunk","created":1700000000,"model":"deepseek-v4.1-flash","choices":[{"index":0,"delta":{"content":"","reasoning_content":""},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":334,"completion_tokens":71,"total_tokens":405,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens_details":{"reasoning_tokens":29}},"service_tier":"default"}
+
+data:[DONE]
+

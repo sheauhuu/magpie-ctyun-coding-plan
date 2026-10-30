@@ -1,0 +1,12 @@
+data:{"model":"deepseek-v4.1-flash","id":"","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":""}}],"created":1700000000}
+
+data:{"choices":[{"delta":{"content":"","reasoning_content":"","role":"assistant"},"index":0}],"created":1700000000,"id":"chatcmpl-fixture-deepseek-length","model":"deepseek-v4.1-flash","service_tier":"default","object":"chat.completion.chunk"}
+
+data:{"choices":[{"delta":{"content":"","reasoning_content":"We","role":"assistant"},"index":0}],"created":1700000000,"id":"chatcmpl-fixture-deepseek-length","model":"deepseek-v4.1-flash","service_tier":"default","object":"chat.completion.chunk"}
+
+data:{"choices":[{"delta":{"content":"","reasoning_content":" need answer Chinese. Need write","role":"assistant"},"index":0}],"created":1700000000,"id":"chatcmpl-fixture-deepseek-length","model":"deepseek-v4.1-flash","service_tier":"default","object":"chat.completion.chunk"}
+
+data:{"choices":[{"delta":{"content":"","reasoning_content":" integers","role":"assistant"},"finish_reason":"length","index":0}],"created":1700000000,"id":"chatcmpl-fixture-deepseek-length","model":"deepseek-v4.1-flash","service_tier":"default","object":"chat.completion.chunk","usage":{"completion_tokens":8,"prompt_tokens":44,"total_tokens":52,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens_details":{"reasoning_tokens":8}}}
+
+data:[DONE]
+
