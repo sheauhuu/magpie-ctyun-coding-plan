@@ -2,21 +2,24 @@
 // primary sources are recorded in README.md. Match exact IDs:
 // a newly discovered model must not silently inherit another version's rules.
 const profiles = {
-  'glm-5.3-oc': 'glm-effort',
+  'glm-5.3': 'glm-effort',
   'glm-5.3-flash': 'glm-effort',
   'deepseek-v4.1-flash': 'deepseek',
-  'deepseek-v4-flash-0731-oc': 'deepseek',
-  'deepseek-v4-pro-0813-oc': 'deepseek',
-  'glm-5.1-oc': 'thinking-switch',
-  'kimi-k2.5-oc': 'thinking-switch',
-  'qwen-3.6-flash-oc': 'qwen-switch',
-  'MiniMax-M2.5-oc': 'always-on',
+  'deepseek-v4-flash-0731': 'deepseek',
+  'deepseek-v4-pro-0813': 'deepseek',
+  'glm-5.1': 'thinking-switch',
+  'kimi-k2.5': 'thinking-switch',
+  'qwen-3.6-flash': 'qwen-switch',
+  'MiniMax-M2.5': 'always-on',
 };
+// Strip only CTYun's terminal suffix; keep case, release numbers and variants.
+export const modelId = id => typeof id === 'string' ? id.replace(/-oc$/i, '') : id;
 const graded = ['low', 'high', 'max'];
 const aliases = { minimal: 'low', medium: 'high', xhigh: 'high', ultra: 'max' };
 const onEfforts = new Set(['enabled', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
 
 export function reasoningConfig(id) {
+  id = modelId(id);
   const profile = Object.hasOwn(profiles, id) ? profiles[id] : undefined;
   if (!profile) return {};
   const levels = profile === 'glm-effort' ? graded : profile === 'deepseek' ? ['none', ...graded]
@@ -31,7 +34,8 @@ export class ReasoningSettingError extends Error {}
 // MAGPIE forwards variant *names* as reasoning_effort. Translate switches
 // to the provider's native parameters; never invent token-budget mappings.
 export function adaptReasoning(body) {
-  const profile = Object.hasOwn(profiles, body?.model) ? profiles[body.model] : undefined;
+  const id = modelId(body?.model);
+  const profile = Object.hasOwn(profiles, id) ? profiles[id] : undefined;
   const effort = body?.reasoning_effort;
   if (!profile || effort === undefined) return body;
   const result = { ...body };

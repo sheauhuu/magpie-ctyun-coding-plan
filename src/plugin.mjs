@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { AuthError, CtyunError, CtyunSession, BASE, modelCatalog } from './session.mjs';
 import { CredentialStore, credentialId } from './credentials.mjs';
 import { browserLogin } from './browser.mjs';
-import { adaptReasoning, ReasoningSettingError } from './model-profiles.mjs';
+import { modelId, adaptReasoning, ReasoningSettingError } from './model-profiles.mjs';
 import { normalizeSSE } from './sse.mjs';
 
 export const PROVIDER = 'ctyun-coding-plan';
@@ -15,6 +15,8 @@ const SNAPSHOT = [
 const REQUIRED = value => typeof value === 'string' && value.trim() ? undefined : '此项不能为空';
 const MESSAGE = error => error instanceof CtyunError ? error.message : '操作未完成，请稍后重试';
 const fingerprint = auth => JSON.stringify([auth.refresh, auth.ctyun]);
+const hasPortal = auth => auth?.type === 'oauth' && auth.ctyun && auth.ctyun.mode !== 'api-key';
+const accountKey = auth => createHash('sha256').update(`${auth.accountId}\0${auth.access}`).digest('hex');
 
 export function savedAuth(session, inputs, mode, ref) {
   return { type: 'success', refresh: JSON.stringify(session.state()), access: inputs.api_key.trim(),
@@ -24,10 +26,9 @@ export function savedAuth(session, inputs, mode, ref) {
 }
 
 export class SessionManager {
-  constructor({ sessionFactory, credentials, persist }) {
+  constructor({ sessionFactory, credentials }) {
     this.make = sessionFactory;
     this.credentials = credentials;
-    this.persist = persist;
     this.pending = new Map();
     this.latest = new Map();
   }
@@ -44,22 +45,25 @@ export class SessionManager {
     }
   }
 
-  async update(auth, session, extra = {}, saveChanges = true) {
-    const next = { ...auth, refresh: JSON.stringify(session.state()), expires: session.expires(),
-      ctyun: { ...auth.ctyun, portalError: '', reauthRequired: false }, ...extra };
-    if (saveChanges && JSON.stringify(auth) !== JSON.stringify(next)) await this.persist(next);
-    return next;
+  update(auth, session) {
+    return { ...auth, refresh: JSON.stringify(session.state()), expires: session.expires(),
+      ctyun: { ...auth.ctyun, portalError: '', reauthRequired: false } };
   }
 
   // Serialize per account: concurrent quota/model reads cannot overwrite a renewed
-  // cookie jar or submit the same password several times. The host scopes auth.set.
-  async run(getAuth, operation, forceRefresh = false, saveChanges = true) {
+  // cookie jar or submit the same password several times. Reads keep changes in
+  // memory only: MAGPIE's auth.set can recreate an account deleted concurrently.
+  // Only auth.refresh returns a patch for the host's atomic, conditional save.
+  async run(getAuth, operation, forceRefresh = false) {
     const initial = await getAuth();
-    if (initial?.type !== 'oauth' || !initial.ctyun) throw new AuthError('请先登录天翼云 Coding Plan');
-    const id = createHash('sha256').update(`${initial.accountId}\0${initial.access}`).digest('hex');
+    if (!hasPortal(initial)) throw new AuthError('请先登录天翼云 Coding Plan');
+    const id = accountKey(initial);
     const previous = this.pending.get(id) || Promise.resolve();
     const task = previous.catch(() => {}).then(async () => {
       let auth = await getAuth();
+      if (!hasPortal(auth) || auth.accountId !== initial.accountId || auth.access !== initial.access) {
+        throw new AuthError('账号已移除或更改');
+      }
       const latest = this.latest.get(id);
       if (latest && (fingerprint(auth) === latest.source || fingerprint(auth) === fingerprint(latest.auth))) auth = latest.auth;
       let state;
@@ -74,14 +78,13 @@ export class SessionManager {
           await this.recover(session, auth);
           value = await operation(session, auth);
         }
-        const updated = await this.update(auth, session, {}, saveChanges);
+        const updated = this.update(auth, session);
         this.latest.set(id, { source: fingerprint(initial), auth: updated });
         return { value, auth: updated };
       } catch (error) {
         const reauth = error instanceof AuthError || ['captcha', 'sms'].includes(error.code);
         const failed = { ...auth, refresh: JSON.stringify(session.state()), expires: Date.now() + (reauth ? 86400_000 : 60_000),
           ctyun: { ...auth.ctyun, portalError: MESSAGE(error), reauthRequired: reauth } };
-        if (saveChanges) await this.persist(failed);
         this.latest.set(id, { source: fingerprint(initial), auth: failed });
         throw error;
       }
@@ -92,13 +95,14 @@ export class SessionManager {
   }
 }
 
-export async function createPlugin({ client }, dependencies = {}) {
+export async function createPlugin(_input, dependencies = {}) {
   const credentials = dependencies.credentials || new CredentialStore();
   const sessionFactory = dependencies.sessionFactory || (options => new CtyunSession(options));
   const browser = dependencies.browserLogin || browserLogin;
   const request = dependencies.fetchImpl || globalThis.fetch;
-  const persist = async body => { await client.auth.set({ path: { id: PROVIDER }, body }); };
-  const sessions = new SessionManager({ sessionFactory, credentials, persist });
+  const sessions = new SessionManager({ sessionFactory, credentials });
+  const defaultUpstreamModels = new Map(SNAPSHOT.map(([id]) => [modelId(id), id]));
+  const accountUpstreamModels = new Map();
   const common = [
     { type: 'text', key: 'account_name', message: '账号名称（用于区分多个账号）', placeholder: '天翼云个人账号', validate: REQUIRED },
     { type: 'password', key: 'api_key', message: 'Coding Plan API Key', placeholder: '填写套餐专用密钥', validate: REQUIRED },
@@ -114,6 +118,22 @@ export async function createPlugin({ client }, dependencies = {}) {
     auth: {
       provider: PROVIDER,
       methods: [
+        {
+          // MAGPIE's OAuth result is its extensible multi-account envelope.
+          // An empty refresh and zero expiry carry only the inference key;
+          // no website session is created and the host schedules no renewal.
+          type: 'oauth', label: '仅 API Key（不查询额度）', prompts: common.slice(0, 2),
+          async authorize(inputs) {
+            return { method: 'auto', opened: true, instructions: '仅保存 API Key，不登录官网，不查询额度。以后可用相同账号名称和原 API Key 补充浏览器或密码登录。',
+              async callback() {
+                try {
+                  validateInputs(inputs);
+                  return { type: 'success', accountId: inputs.account_name.trim(), access: inputs.api_key.trim(),
+                    refresh: '', expires: 0, ctyun: { version: 1, mode: 'api-key' } };
+                } catch (error) { return { type: 'failed', error: MESSAGE(error) }; }
+              } };
+          },
+        },
         {
           type: 'oauth', label: '浏览器单点登录（不保存密码）', prompts: common,
           async authorize(inputs) {
@@ -155,9 +175,10 @@ export async function createPlugin({ client }, dependencies = {}) {
       ],
       refreshLead: 60_000,
       async refresh(auth) {
+        if (!hasPortal(auth)) return;
         try {
           // The host owns saving this patch under its renewal lock.
-          return (await sessions.run(async () => auth, s => s.models(), true, false)).auth;
+          return (await sessions.run(async () => auth, s => s.models(), true)).auth;
         } catch (error) {
           // Website auth is separate from the inference key: do not mark the
           // whole MAGPIE account expired when only portal metadata is unavailable.
@@ -176,6 +197,7 @@ export async function createPlugin({ client }, dependencies = {}) {
               throw new CtyunError('已阻止向非套餐接口发送 API Key', 'ORIGIN');
             }
             const current = await getAuth();
+            if (!current?.access) throw new AuthError('账号已移除或更改');
             let req = new Request(input, init);
             const headers = new Headers(req.headers);
             headers.delete('cookie');
@@ -188,7 +210,11 @@ export async function createPlugin({ client }, dependencies = {}) {
               let body;
               try { body = await req.clone().json(); } catch { /* upstream validates */ }
               try {
-                const adapted = adaptReasoning(body);
+                const adaptedReasoning = adaptReasoning(body);
+                const upstreamModels = hasPortal(current) ? accountUpstreamModels.get(accountKey(current)) : undefined;
+                const upstream = (upstreamModels ?? defaultUpstreamModels).get(adaptedReasoning?.model);
+                const adapted = upstream && upstream !== adaptedReasoning.model
+                  ? { ...adaptedReasoning, model: upstream } : adaptedReasoning;
                 if (adapted !== body) {
                   headers.delete('content-length');
                   req = new Request(req, { body: JSON.stringify(adapted) });
@@ -203,6 +229,10 @@ export async function createPlugin({ client }, dependencies = {}) {
       },
       async usage(getAuth) {
         try {
+          const auth = await getAuth();
+          if (auth?.ctyun?.mode === 'api-key') {
+            return { plan: '仅 API Key（未启用额度查询）', windows: [], signIn: 'kept' };
+          }
           const { value } = await sessions.run(getAuth, (s, a) => s.quota(a.ctyun.planId));
           return { ...value, signIn: 'kept' };
         } catch (error) { return { windows: [], error: MESSAGE(error), signIn: 'kept' }; }
@@ -211,10 +241,22 @@ export async function createPlugin({ client }, dependencies = {}) {
     provider: {
       id: PROVIDER,
       async models(provider, { auth } = {}) {
-        if (!auth?.ctyun) return provider.models;
+        if (!hasPortal(auth)) return provider.models;
         try {
+          // This hook receives a snapshot, not a live getAuth. Saving from it
+          // can recreate an account removed while model discovery is in flight.
           const { value } = await sessions.run(async () => auth, s => s.models());
-          return modelCatalog(value, provider.models);
+          const models = modelCatalog(value, provider.models);
+          // Remember exact official IDs, including newly discovered models.
+          // Never append -oc to models the vendor actually lists without it.
+          const upstreamModels = new Map(defaultUpstreamModels);
+          for (const row of value.models) {
+            if (typeof row.model === 'string' && row.model && row.api?.includes('openai-completions')) {
+              upstreamModels.set(modelId(row.model), row.model);
+            }
+          }
+          accountUpstreamModels.set(accountKey(auth), upstreamModels);
+          return models;
         } catch { return provider.models; }
       },
     },

@@ -72,11 +72,11 @@ test('missing or invalid usage is an error, never fabricated zero quota', () => 
   assert.throws(() => quotaWindows(plan, detail));
 });
 
-test('catalog keeps exact case and -oc IDs, excludes unsupported protocols', () => {
+test('catalog keeps exact case, strips terminal -oc and excludes unsupported protocols', () => {
   const result = modelCatalog(models);
-  assert.ok(result['MiniMax-M2.5-oc']);
+  assert.ok(result['MiniMax-M2.5']);
   assert.equal(result['anthropic-only'], undefined);
-  assert.equal(result['MiniMax-M2.5'], undefined);
+  assert.equal(result['MiniMax-M2.5-oc'], undefined);
 });
 
 test('transport failures never expose underlying exceptions with secret values', async () => {

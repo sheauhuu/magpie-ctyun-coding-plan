@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { CookieJar } from 'tough-cookie';
-import { reasoningConfig } from './model-profiles.mjs';
+import { modelId, reasoningConfig } from './model-profiles.mjs';
 
 export const APP = 'https://eaichat.ctyun.cn';
 export const IAM = 'https://desk.ctyun.cn/cloudB/dy/iam/';
@@ -58,7 +58,7 @@ export class CtyunSession {
     let url = allowedURL(address);
     let data = body === undefined ? undefined : form ? new URLSearchParams(body).toString() : JSON.stringify(body);
     for (let i = 0; i < 12; i++) {
-      const headers = new Headers({ Accept: 'application/json, text/html', 'User-Agent': 'magpie-ctyun-coding-plan/0.1.0' });
+      const headers = new Headers({ Accept: 'application/json, text/html', 'User-Agent': 'magpie-ctyun-coding-plan/0.2.0' });
       const cookie = await this.jar.getCookieString(url.href);
       if (cookie) headers.set('Cookie', cookie);
       if (data !== undefined) {
@@ -199,15 +199,16 @@ export function modelCatalog(data, previous) {
   const rows = data.models.filter(m => typeof m.model === 'string' && m.model && m.api?.includes('openai-completions'));
   if (!rows.length) throw new CtyunError('官方未返回可调用的模型');
   return Object.fromEntries(rows.map(m => {
-    const reasoning = reasoningConfig(m.model);
-    const model = { id: m.model, name: m.title || m.model, tool_call: true,
+    const id = modelId(m.model);
+    const reasoning = reasoningConfig(id);
+    const model = { id, name: id === 'glm-5.3' ? 'GLM-5.3' : modelId(m.title || m.model), tool_call: true,
       modalities: { input: ['text'], output: ['text'] }, ...reasoning };
-    if (previous === undefined) return [m.model, model];
+    if (previous === undefined) return [id, model];
     // provider.models receives normalized models, unlike config. Keep API,
     // limits and cost metadata or dynamic discovery erases host capabilities.
-    const was = previous[m.model];
-    return [m.model, { ...was, ...model,
-      api: was?.api ?? { id: m.model, url: BASE, npm: '@ai-sdk/openai-compatible' },
+    const was = previous[id] ?? previous[m.model];
+    return [id, { ...was, ...model,
+      api: { ...(was?.api ?? { url: BASE, npm: '@ai-sdk/openai-compatible' }), id },
       limit: was?.limit ?? { context: 0, output: 0 },
       cost: was?.cost ?? { input: 0, output: 0 },
       capabilities: { toolcall: true, input: { text: true }, output: { text: true },

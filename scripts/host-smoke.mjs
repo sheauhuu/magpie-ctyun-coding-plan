@@ -39,7 +39,7 @@ try {
   const providers = await rpc('providers', {});
   assert.ok(JSON.stringify(providers).includes('ctyun-coding-plan'));
   assert.ok(JSON.stringify(providers).includes('deepseek-v4.1-flash'));
-  assert.ok(JSON.stringify(providers).includes('MiniMax-M2.5-oc'));
+  assert.ok(JSON.stringify(providers).includes('MiniMax-M2.5'));
   const manifest = JSON.parse(await readFile(join(repo, 'package.json'), 'utf8'));
   const findProvider = value => {
     if (!value || typeof value !== 'object') return undefined;
@@ -47,7 +47,10 @@ try {
     for (const child of Object.values(value)) { const found = findProvider(child); if (found) return found; }
   };
   const provider = findProvider(providers);
+  assert.ok(provider.models.every(m => !/-oc$/i.test(m.id) && !/-oc$/i.test(m.name) && !/-oc$/i.test(m.apiId)));
   assert.equal(provider?.name, '天翼云 Coding Plan');
+  assert.equal(provider.methods.length, 3);
+  assert.equal(provider.methods[0].label, '仅 API Key（不查询额度）');
   assert.equal(provider.icon, manifest.magpie.icon);
   assert.ok(provider.icon.startsWith('data:image/x-icon;base64,'));
   const findModel = (value, id) => {
@@ -56,11 +59,11 @@ try {
     for (const child of Object.values(value)) { const found = findModel(child, id); if (found) return found; }
   };
   for (const [id, levels] of [
-    ['glm-5.3-oc', ['low', 'high', 'max']],
+    ['glm-5.3', ['low', 'high', 'max']],
     ['deepseek-v4.1-flash', ['none', 'low', 'high', 'max']],
-    ['kimi-k2.5-oc', ['none', 'enabled']],
-    ['qwen-3.6-flash-oc', ['none', 'enabled']],
-    ['MiniMax-M2.5-oc', ['enabled']],
+    ['kimi-k2.5', ['none', 'enabled']],
+    ['qwen-3.6-flash', ['none', 'enabled']],
+    ['MiniMax-M2.5', ['enabled']],
   ]) {
     const model = findModel(providers, id);
     assert.equal(model?.reasoning, true, id);
@@ -68,10 +71,10 @@ try {
   }
   const first = await rpc('prompt', { provider: 'ctyun-coding-plan', method: 0, inputs: {} });
   assert.equal(first.prompt.key, 'account_name');
-  const secret = await rpc('prompt', { provider: 'ctyun-coding-plan', method: 1, inputs: { account_name: 'fixture' } });
+  const secret = await rpc('prompt', { provider: 'ctyun-coding-plan', method: 2, inputs: { account_name: 'fixture' } });
   assert.equal(secret.prompt.key, 'api_key');
   assert.equal(secret.prompt.type, 'password');
-  console.log(JSON.stringify({ magpieHostLoad: 'ok', provider: 'ctyun-coding-plan', displayName: provider.name, icon: 'embedded official favicon', loginMethods: 2, secretPrompt: 'masked', reasoningVariants: 'ok' }));
+  console.log(JSON.stringify({ magpieHostLoad: 'ok', provider: 'ctyun-coding-plan', displayName: provider.name, icon: 'embedded official favicon', loginMethods: 3, secretPrompt: 'masked', reasoningVariants: 'ok' }));
 } finally {
   child.stdin.end(); child.kill();
   for (const item of waiting.values()) clearTimeout(item.timer);

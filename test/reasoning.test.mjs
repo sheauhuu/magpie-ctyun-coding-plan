@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptReasoning, reasoningConfig, ReasoningSettingError } from '../src/model-profiles.mjs';
+import { modelId, adaptReasoning, reasoningConfig, ReasoningSettingError } from '../src/model-profiles.mjs';
 import { modelCatalog, BASE } from '../src/session.mjs';
 import { createPlugin, PROVIDER } from '../src/plugin.mjs';
 
@@ -9,12 +9,12 @@ test('each exact model version declares only documented levels or switches', asy
   const config = {}; await plugin.config(config);
   const models = config.provider[PROVIDER].models;
   const expected = {
-    'glm-5.3-oc': ['low', 'high', 'max'], 'glm-5.3-flash': ['low', 'high', 'max'],
+    'glm-5.3': ['low', 'high', 'max'], 'glm-5.3-flash': ['low', 'high', 'max'],
     'deepseek-v4.1-flash': ['none', 'low', 'high', 'max'],
-    'deepseek-v4-flash-0731-oc': ['none', 'low', 'high', 'max'],
-    'deepseek-v4-pro-0813-oc': ['none', 'low', 'high', 'max'],
-    'glm-5.1-oc': ['none', 'enabled'], 'kimi-k2.5-oc': ['none', 'enabled'],
-    'qwen-3.6-flash-oc': ['none', 'enabled'], 'MiniMax-M2.5-oc': ['enabled'],
+    'deepseek-v4-flash-0731': ['none', 'low', 'high', 'max'],
+    'deepseek-v4-pro-0813': ['none', 'low', 'high', 'max'],
+    'glm-5.1': ['none', 'enabled'], 'kimi-k2.5': ['none', 'enabled'],
+    'qwen-3.6-flash': ['none', 'enabled'], 'MiniMax-M2.5': ['enabled'],
   };
   assert.equal(Object.keys(models).length, 9);
   for (const [id, levels] of Object.entries(expected)) {
@@ -25,12 +25,30 @@ test('each exact model version declares only documented levels or switches', asy
   assert.deepEqual(reasoningConfig('__proto__'), {});
 });
 
+test('all terminal -oc suffixes are removed without changing case, releases or other variants', () => {
+  const ids = ['glm-5.1-oc', 'MiniMax-M2.5-oc', 'kimi-k2.5-oc', 'qwen-3.6-flash-oc',
+    'deepseek-v4-pro-0813-oc', 'new-model-OC', 'oc-model', 'model-oc-preview'];
+  const models = modelCatalog({ models: ids.map(model => ({ model, title: model, api: ['openai-completions'] })) });
+  assert.deepEqual(Object.keys(models), ['glm-5.1', 'MiniMax-M2.5', 'kimi-k2.5', 'qwen-3.6-flash',
+    'deepseek-v4-pro-0813', 'new-model', 'oc-model', 'model-oc-preview']);
+  for (const id of ids) {
+    assert.equal(models[modelId(id)].name, modelId(id));
+    assert.deepEqual(reasoningConfig(modelId(id)), reasoningConfig(id));
+    const effort = reasoningConfig(id).variants ? Object.keys(reasoningConfig(id).variants).at(-1) : undefined;
+    const clean = adaptReasoning({ model: modelId(id), reasoning_effort: effort });
+    const original = adaptReasoning({ model: id, reasoning_effort: effort });
+    assert.deepEqual({ ...clean, model: id }, original);
+  }
+});
+
 test('dynamic model discovery keeps normalized host metadata and new models get text defaults', () => {
-  const previous = { 'glm-5.3-oc': { api: { id: 'glm-5.3-oc', url: BASE, npm: 'custom' },
+  const previous = { 'glm-5.3': { api: { id: 'glm-5.3', url: BASE, npm: 'custom' },
     cost: { input: 7 }, limit: { context: 123 }, capabilities: { reasoning: false, toolcall: true, temperature: false } } };
   const catalog = modelCatalog({ models: ['glm-5.3-oc', 'brand-new'].map(model => ({ model, api: ['openai-completions'] })) }, previous);
-  const glm = catalog['glm-5.3-oc'];
-  assert.deepEqual(glm.api, previous['glm-5.3-oc'].api);
+  const glm = catalog['glm-5.3'];
+  assert.equal(glm.name, 'GLM-5.3');
+  assert.equal(catalog['glm-5.3-oc'], undefined);
+  assert.deepEqual(glm.api, previous['glm-5.3'].api);
   assert.deepEqual(glm.limit, { context: 123 });
   assert.deepEqual(glm.cost, { input: 7 });
   assert.equal(glm.capabilities.reasoning, true);
@@ -38,6 +56,14 @@ test('dynamic model discovery keeps normalized host metadata and new models get 
   assert.equal(catalog['brand-new'].api.url, BASE);
   assert.equal(catalog['brand-new'].capabilities.reasoning, undefined);
   assert.equal(catalog['brand-new'].variants, undefined);
+});
+
+test('GLM-5.3 keeps its routing ID and display name when the portal title is the upstream ID', () => {
+  for (const upstream of ['glm-5.3-oc', 'glm-5.3']) {
+    const models = modelCatalog({ models: [{ model: upstream, title: 'glm-5.3-oc', api: ['openai-completions'] }] });
+    assert.deepEqual(Object.keys(models), ['glm-5.3']);
+    assert.equal(models['glm-5.3'].name, 'GLM-5.3');
+  }
 });
 
 test('graded controls retain native thinking priority and documented DeepSeek aliases', () => {
@@ -83,6 +109,21 @@ test('loader translates both Chat endpoint forms and wraps SSE without leaking p
     return new Response('data: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream', 'x-request-id': 'fixture' } });
   } });
   const loader = await plugin.auth.loader(async () => ({ access: 'fixture-key' }));
+  for (const [publicId, upstream] of [
+    ['MiniMax-M2.5', 'MiniMax-M2.5-oc'], ['glm-5.1', 'glm-5.1-oc'], ['kimi-k2.5', 'kimi-k2.5-oc'],
+    ['qwen-3.6-flash', 'qwen-3.6-flash-oc'], ['deepseek-v4-flash-0731', 'deepseek-v4-flash-0731-oc'],
+    ['deepseek-v4-pro-0813', 'deepseek-v4-pro-0813-oc'], ['glm-5.3-flash', 'glm-5.3-flash'],
+    ['deepseek-v4.1-flash', 'deepseek-v4.1-flash'], ['unknown-model', 'unknown-model'],
+  ]) {
+    await loader.fetch(BASE + '/chat/completions', { method: 'POST', body: JSON.stringify({ model: publicId }) });
+    assert.equal(sent.at(-1).body.model, upstream);
+  }
+  for (const effort of [undefined, 'high']) {
+    await loader.fetch(BASE + '/chat/completions', { method: 'POST',
+      body: JSON.stringify({ model: 'glm-5.3', reasoning_effort: effort }) });
+    assert.equal(sent.at(-1).body.model, 'glm-5.3-oc');
+    if (effort) assert.equal(sent.at(-1).body.thinking.type, 'enabled');
+  }
   for (const path of ['/chat/completions', '/v1/chat/completions']) {
     const response = await loader.fetch(BASE + path, { method: 'POST',
       headers: { 'content-type': 'application/json', cookie: 'private-cookie', 'content-length': '0' },
@@ -98,4 +139,45 @@ test('loader translates both Chat endpoint forms and wraps SSE without leaking p
   assert.equal(invalid.status, 400);
   assert.equal((await invalid.json()).error.code, 'unsupported_reasoning_setting');
   assert.equal(sent.length, before);
+});
+
+test('dynamic discovery remembers exact upstream IDs for new models and native unsuffixed IDs', async () => {
+  const sent = [];
+  const plugin = await createPlugin({ client: {} }, { credentials: {},
+    sessionFactory: ({ state }) => ({ state: () => state, expires: () => Date.now() + 3_600_000,
+      models: async () => ({ models: [
+        { model: 'future-oc', title: 'Future-oc', api: ['openai-completions'] },
+        { model: 'glm-5.1', api: ['openai-completions'] },
+      ] }) }),
+    fetchImpl: async req => { sent.push(await req.json()); return Response.json({}); } });
+  const auth = { type: 'oauth', accountId: 'fixture', access: 'fixture-key', refresh: '{}', ctyun: { mode: 'browser' } };
+  const models = await plugin.provider.models({ models: {} }, { auth });
+  assert.deepEqual(Object.keys(models), ['future', 'glm-5.1']);
+  const loader = await plugin.auth.loader(async () => auth);
+  for (const model of ['future', 'glm-5.1']) {
+    await loader.fetch(BASE + '/chat/completions', { method: 'POST', body: JSON.stringify({ model }) });
+  }
+  assert.deepEqual(sent.map(r => r.model), ['future-oc', 'glm-5.1']);
+});
+
+test('model mappings stay with their account and do not change API-key-only defaults', async () => {
+  const sent = [];
+  const plugin = await createPlugin({ client: {} }, { credentials: {},
+    sessionFactory: ({ state }) => ({ state: () => state, expires: () => Date.now() + 3_600_000,
+      models: async () => ({ models: state.ids.map(model => ({ model, api: ['openai-completions'] })) }) }),
+    fetchImpl: async req => { sent.push(await req.json()); return Response.json({}); } });
+  const auth = (accountId, ids) => ({ type: 'oauth', accountId, access: 'fixture-key-' + accountId,
+    refresh: JSON.stringify({ ids }), ctyun: { mode: 'browser' } });
+  const a = auth('a', ['future-oc']);
+  const b = auth('b', ['future', 'glm-5.1']);
+  await plugin.provider.models({ models: {} }, { auth: a });
+  const loaderA = await plugin.auth.loader(async () => a);
+  await plugin.provider.models({ models: {} }, { auth: b });
+  const loaderB = await plugin.auth.loader(async () => b);
+  const apiOnly = { ...a, refresh: '', ctyun: { mode: 'api-key' } };
+  const loaderKey = await plugin.auth.loader(async () => apiOnly);
+  for (const [loader, model] of [[loaderA, 'future'], [loaderB, 'future'], [loaderKey, 'glm-5.1']]) {
+    await loader.fetch(BASE + '/chat/completions', { method: 'POST', body: JSON.stringify({ model }) });
+  }
+  assert.deepEqual(sent.map(r => r.model), ['future-oc', 'future', 'glm-5.1-oc']);
 });
