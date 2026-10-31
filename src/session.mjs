@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { CookieJar } from 'tough-cookie';
-import { modelId, reasoningConfig } from './model-profiles.mjs';
+import { modelId, reasoningConfig, modelCost } from './model-profiles.mjs';
 
 export const APP = 'https://eaichat.ctyun.cn';
 export const IAM = 'https://desk.ctyun.cn/cloudB/dy/iam/';
@@ -201,8 +201,9 @@ export function modelCatalog(data, previous) {
   return Object.fromEntries(rows.map(m => {
     const id = modelId(m.model);
     const reasoning = reasoningConfig(id);
+    const price = modelCost(id);
     const model = { id, name: id === 'glm-5.3' ? 'GLM-5.3' : modelId(m.title || m.model), tool_call: true,
-      modalities: { input: ['text'], output: ['text'] }, ...reasoning };
+      modalities: { input: ['text'], output: ['text'] }, ...reasoning, ...(price ? { cost: price } : {}) };
     if (previous === undefined) return [id, model];
     // provider.models receives normalized models, unlike config. Keep API,
     // limits and cost metadata or dynamic discovery erases host capabilities.
@@ -210,7 +211,8 @@ export function modelCatalog(data, previous) {
     return [id, { ...was, ...model,
       api: { ...(was?.api ?? { url: BASE, npm: '@ai-sdk/openai-compatible' }), id },
       limit: was?.limit ?? { context: 0, output: 0 },
-      cost: was?.cost ?? { input: 0, output: 0 },
+      cost: was?.cost ?? (price ? { input: price.input, output: price.output,
+        cache: { read: price.cache_read ?? 0, write: price.cache_write ?? 0 } } : { input: 0, output: 0 }),
       capabilities: { toolcall: true, input: { text: true }, output: { text: true },
         ...was?.capabilities, ...(reasoning.reasoning ? { reasoning: true } : {}) },
     }];

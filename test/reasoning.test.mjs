@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { modelId, adaptReasoning, reasoningConfig, ReasoningSettingError } from '../src/model-profiles.mjs';
+import { modelId, adaptReasoning, reasoningConfig, modelCost, ReasoningSettingError } from '../src/model-profiles.mjs';
 import { modelCatalog, BASE } from '../src/session.mjs';
 import { createPlugin, PROVIDER } from '../src/plugin.mjs';
 
@@ -56,6 +56,23 @@ test('dynamic model discovery keeps normalized host metadata and new models get 
   assert.equal(catalog['brand-new'].api.url, BASE);
   assert.equal(catalog['brand-new'].capabilities.reasoning, undefined);
   assert.equal(catalog['brand-new'].variants, undefined);
+  assert.deepEqual(catalog['brand-new'].cost, { input: 0, output: 0 });
+});
+
+test('built-in models carry official list prices and discovery fills normalized costs', async () => {
+  const plugin = await createPlugin({ client: {} });
+  const config = {}; await plugin.config(config);
+  const models = config.provider[PROVIDER].models;
+  for (const [id, model] of Object.entries(models)) {
+    assert.ok(model.cost?.input > 0 && model.cost.output > 0, id);
+    assert.deepEqual(model.cost, modelCost(id));
+  }
+  assert.deepEqual(models['glm-5.3'].cost, { input: 1.4, output: 4.4, cache_read: 0.26 });
+  assert.deepEqual(modelCost('MiniMax-M2.5-oc'), modelCost('MiniMax-M2.5'));
+  assert.equal(modelCost('deepseek-v4-flash'), undefined);
+  assert.equal(modelCost('__proto__'), undefined);
+  const discovered = modelCatalog({ models: [{ model: 'qwen-3.6-flash-oc', api: ['openai-completions'] }] }, {});
+  assert.deepEqual(discovered['qwen-3.6-flash'].cost, { input: 0.25, output: 1.5, cache: { read: 0.025, write: 0.3125 } });
 });
 
 test('GLM-5.3 keeps its routing ID and display name when the portal title is the upstream ID', () => {

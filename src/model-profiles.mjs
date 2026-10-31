@@ -12,6 +12,20 @@ const profiles = {
   'qwen-3.6-flash': 'qwen-switch',
   'MiniMax-M2.5': 'always-on',
 };
+// CTYun publishes no per-token prices. Use each vendor's international list
+// price in USD per million tokens (models.dev format), reviewed 2026-10-31.
+// deepseek-v4-flash-0731 is no longer listed; it keeps the V4 Flash launch price.
+const prices = {
+  'glm-5.3': { input: 1.4, output: 4.4, cache_read: 0.26 },
+  'glm-5.3-flash': { input: 0.15, output: 0.5, cache_read: 0.03 },
+  'glm-5.1': { input: 1.4, output: 4.4, cache_read: 0.26 },
+  'deepseek-v4.1-flash': { input: 0.15, output: 0.6, cache_read: 0.003 },
+  'deepseek-v4-flash-0731': { input: 0.14, output: 0.28, cache_read: 0.028 },
+  'deepseek-v4-pro-0813': { input: 0.66, output: 1.98, cache_read: 0.022 },
+  'kimi-k2.5': { input: 0.6, output: 3, cache_read: 0.1 },
+  'qwen-3.6-flash': { input: 0.25, output: 1.5, cache_read: 0.025, cache_write: 0.3125 },
+  'MiniMax-M2.5': { input: 0.3, output: 1.2, cache_read: 0.03, cache_write: 0.375 },
+};
 // Strip only CTYun's terminal suffix; keep case, release numbers and variants.
 export const modelId = id => typeof id === 'string' ? id.replace(/-oc$/i, '') : id;
 const graded = ['low', 'high', 'max'];
@@ -27,6 +41,12 @@ export function reasoningConfig(id) {
   // "enabled" is a switch, not an invented effort level. It also prevents
   // the host from borrowing unrelated effort levels for always-on models.
   return { reasoning: true, variants: Object.fromEntries(levels.map(level => [level, { reasoningEffort: level }])) };
+}
+
+// Exact IDs only, like reasoning profiles: unknown models stay unpriced.
+export function modelCost(id) {
+  id = modelId(id);
+  return Object.hasOwn(prices, id) ? { ...prices[id] } : undefined;
 }
 
 export class ReasoningSettingError extends Error {}

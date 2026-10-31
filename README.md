@@ -92,6 +92,8 @@ ctyun-coding-plan/MiniMax-M2.5
 
 magpie 按模型 ID 自动分组，显示名称本身不决定分组。若此前勾选了带 `-oc` 的旧 ID，需在供应商模型列表中改选去掉后缀的新 ID；magpie 会保留旧勾选，仅更新插件清单或重启不会迁移它。直接选择了旧 ID 的客户端、保存的路由组成员也需同步更新。官网暂不可用时保留此前的清单；初次未登录时使用 2026-10-30 的官方清单快照，共 9 个模型。模型能力保守声明为文本输入输出和工具调用，不虚构上下文长度或图片能力。
 
+天翼云不公布按 token 计费的单价。为了让 magpie 能估算费用，内置模型按原厂国际站的官方价格（美元／百万 token，2026-10-31 核对）声明 `cost`，见 `src/model-profiles.mjs`。这只是参考价，Coding Plan 实际按套餐额度计费。`deepseek-v4-flash-0731` 已不在 DeepSeek 价格表中，沿用 V4 Flash 首发价；新发现的未知模型不填价格。
+
 思考设置按模型声明：[GLM-5.3](https://docs.z.ai/guides/llm/glm-5.3)／[Flash](https://docs.z.ai/guides/vlm/glm-5.3-flash) 支持 `low/high/max`，不能关闭，默认 `max`；[DeepSeek](https://api-docs.deepseek.com/guides/thinking_mode/) 支持 `none/low/high/max`，默认开启、`high`；[GLM-5.1](https://docs.z.ai/guides/llm/glm-5.1)、[Kimi-K2.5](https://huggingface.co/moonshotai/Kimi-K2.5)、[Qwen3.6-Flash](https://help.aliyun.com/en/model-studio/deep-thinking) 提供 `none/enabled` 开关，默认开启；[MiniMax-M2.5](https://platform.minimax.io/docs/api-reference/text-openai-api) 仅 `enabled`。除已经实测的 GLM-5.3-oc 和 DeepSeek-V4.1-Flash，其余先按原厂官方能力配置，天翼云行为待逐一核验。
 
 `enabled` 是开启开关，不是分级强度。插件将开关转换为各模型原生的 `thinking.type` 或 `enable_thinking`；Qwen 的数值型 `thinking_budget` 保留，不虚构档位到预算的映射。DeepSeek 显式的 `thinking.type` 优先于 `reasoning_effort`。不传强度时保留原厂默认；新发现的未知模型不自动套用已有模型的规则。

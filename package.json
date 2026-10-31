@@ -1,6 +1,6 @@
 {
   "name": "magpie-ctyun-coding-plan",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "天翼云 Coding Plan 的 MAGPIE 供应商插件，支持仅 API Key 接入、可选网页登录、模型发现与原生额度窗口。",
   "type": "module",
   "main": "./index.mjs",
