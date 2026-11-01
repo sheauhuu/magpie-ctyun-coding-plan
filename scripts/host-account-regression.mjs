@@ -90,14 +90,18 @@ export default async input => {
     models: async () => { await gate('models'); return { models: [{ model: 'glm-5.3-oc', api: ['openai-completions'] }] }; },
     quota: async () => { await gate('quota'); if (await exists('quota.fail')) throw new Error('fixture failure'); return { windows: [{ name: 'fixture', used: 1 }] }; },
   });
-  return createPlugin({ client }, { credentials: { set: async () => {}, remove: async () => {} },
-    sessionFactory: make, browserLogin: async () => make() });
+  const keyring = async () => { if (await exists('headless.fixture')) throw new Error('fixture keyring unavailable'); };
+  return createPlugin({ client }, { credentials: { set: keyring, get: keyring, remove: keyring },
+    sessionFactory: make, browserLogin: async () => {
+      if (await exists('headless.fixture')) throw new Error('fixture display unavailable');
+      return make();
+    } });
 };
 `);
   const a = await start(), b = await start();
   const signIn = async (method, extra = {}) => {
     const flow = await a('authorize', { provider, method,
-      inputs: { account_name: 'fixture-0', api_key: 'fixture-key-0', ...extra } });
+      inputs: { account_name: 'fixture-0', api_key: 'fixture-key-0', ...(method === 2 ? { save_password: 'yes' } : {}), ...extra } });
     return a('callback', { session: flow.session });
   };
   const apiOnly = await signIn(0);
@@ -128,6 +132,24 @@ export default async input => {
     assert.equal((await a('usage', { provider, account: keys[0] })).windows.length, 1);
   }
   messages.push({ scenario: 'API-key-only setup; failed upgrade keeps auth; password and browser upgrade preserve account key and sibling', result: 'pass' });
+  await writeFile(join(folder, 'headless.fixture'), '');
+  const beforeHeadless = JSON.parse(await readFile(authPath, 'utf8'));
+  for (const method of [2, 1]) {
+    assert.equal((await signIn(method, { username: 'fixture-user', password: 'fixture-password' })).ok, false);
+    assert.deepEqual(JSON.parse(await readFile(authPath, 'utf8')), beforeHeadless);
+  }
+  const headless = await signIn(2, { save_password: 'no', username: 'fixture-user', password: 'fixture-password' });
+  assert.equal(headless.ok, true);
+  assert.equal(headless.account, keys[0]);
+  const afterHeadless = JSON.parse(await readFile(authPath, 'utf8'));
+  assert.deepEqual(Object.keys(afterHeadless).sort(), Object.keys(beforeHeadless).sort());
+  assert.equal(afterHeadless[keys[0]].ctyun.mode, 'password-session');
+  assert.equal(afterHeadless[keys[0]].ctyun.credentialRef, undefined);
+  assert.deepEqual(afterHeadless[keys[1]], beforeHeadless[keys[1]]);
+  assert.equal(JSON.stringify(afterHeadless).includes('fixture-password'), false);
+  assert.equal((await a('usage', { provider, account: keys[0] })).windows.length, 1);
+  await rm(join(folder, 'headless.fixture'));
+  messages.push({ scenario: 'unavailable browser and keyring keep old auth; password without storage succeeds in the same account and reads quota', result: 'pass' });
   const downgraded = await signIn(0);
   assert.equal(downgraded.account, keys[0]);
   const onlyAgain = JSON.parse(await readFile(authPath, 'utf8'));

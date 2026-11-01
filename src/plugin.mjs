@@ -108,6 +108,40 @@ export async function createPlugin(_input, dependencies = {}) {
     { type: 'password', key: 'api_key', message: 'Coding Plan API Key', placeholder: '填写套餐专用密钥', validate: REQUIRED },
     { type: 'text', key: 'plan_id', message: '套餐 ID（只有一个有效套餐时留空）' },
   ];
+  const passwordMethod = {
+    type: 'oauth',
+    label: '账号密码登录',
+    prompts: [...common,
+      { type: 'text', key: 'username', message: '天翼云账号（手机号／邮箱／账号名）', validate: REQUIRED },
+      { type: 'select', key: 'save_password', message: '是否保存密码用于自动重登？', options: [
+        { value: 'no', label: '否，不保存密码', hint: '适用于服务器和 Docker；IAM 会话失效后需手动重登' },
+        { value: 'yes', label: '是，保存到系统凭据库', hint: '需要可用的钥匙串／凭据服务；支持自动重登' },
+      ], validate: value => ['yes', 'no'].includes(value) ? undefined : '请选择是或否' },
+      { type: 'password', key: 'password', message: '天翼云密码', validate: REQUIRED },
+    ],
+    async authorize(inputs) {
+      const savePassword = inputs?.save_password === 'yes';
+      return { method: 'auto', opened: true,
+        instructions: savePassword ? '正在登录天翼云，并将账号密码保存到系统凭据库。'
+          : '正在通过账号密码登录天翼云，不打开浏览器、不保存密码。仅保留登录会话；单点登录会话也失效后需再次登录。',
+        async callback() {
+          try {
+            validateInputs(inputs);
+            if (inputs.save_password !== undefined && !['yes', 'no'].includes(inputs.save_password)) {
+              throw new CtyunError('请选择是否保存密码', 'INPUT');
+            }
+            if (REQUIRED(inputs.username) || !inputs.password) throw new CtyunError('请输入账号和密码', 'INPUT');
+            const session = sessionFactory();
+            await session.passwordLogin(inputs.username, inputs.password);
+            await session.models();
+            const ref = savePassword ? credentialId(inputs.account_name.trim()) : undefined;
+            if (savePassword) await credentials.set(ref, { username: inputs.username.trim(), password: inputs.password });
+            return savedAuth(session, inputs, savePassword ? 'password' : 'password-session', ref);
+          } catch (error) { return { type: 'failed', error: MESSAGE(error) }; }
+          finally { if (inputs) inputs.password = ''; }
+        } };
+    },
+  };
 
   return {
     config: async cfg => {
@@ -149,29 +183,7 @@ export async function createPlugin(_input, dependencies = {}) {
               } };
           },
         },
-        {
-          type: 'oauth', label: '账号密码登录（保存到系统凭据库，自动重登）',
-          prompts: [...common,
-            { type: 'text', key: 'username', message: '天翼云账号（手机号／邮箱／账号名）', validate: REQUIRED },
-            { type: 'password', key: 'password', message: '天翼云密码（将保存在系统凭据库中）', validate: REQUIRED },
-          ],
-          async authorize(inputs) {
-            return { method: 'auto', opened: true, instructions: '正在登录天翼云，并将账号密码保存到系统凭据库。',
-              async callback() {
-                try {
-                  validateInputs(inputs);
-                  if (REQUIRED(inputs.username) || !inputs.password) throw new CtyunError('请输入账号和密码', 'INPUT');
-                  const session = sessionFactory();
-                  await session.passwordLogin(inputs.username, inputs.password);
-                  await session.models();
-                  const id = credentialId(inputs.account_name.trim());
-                  await credentials.set(id, { username: inputs.username.trim(), password: inputs.password });
-                  return savedAuth(session, inputs, 'password', id);
-                } catch (error) { return { type: 'failed', error: MESSAGE(error) }; }
-                finally { if (inputs) inputs.password = ''; }
-              } };
-          },
-        },
+        passwordMethod,
       ],
       refreshLead: 60_000,
       async refresh(auth) {

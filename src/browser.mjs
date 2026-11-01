@@ -15,7 +15,13 @@ export async function importBrowserCookies(session, cookies) {
 
 // A fresh, dedicated browser context: no password manager data is imported or saved.
 // It is closed in finally, including timeout and manual window-close paths.
-export async function browserLogin({ state, deviceCode, chromium, timeout = 300_000, sessionFactory } = {}) {
+export async function browserLogin({ state, deviceCode, chromium, timeout = 300_000, sessionFactory,
+  platform = process.platform, env = process.env } = {}) {
+  // The default driver opens a visible window on the magpie host, not in
+  // the browser viewing its web UI. Injected drivers may supply their own display.
+  if (!chromium && platform === 'linux' && !env.DISPLAY && !env.WAYLAND_DISPLAY) {
+    throw new CtyunError('浏览器登录需要 magpie 所在主机具备可操作的图形桌面；当前为无桌面 Linux 环境。请使用“账号密码登录”并选择不保存密码，或选择“仅 API Key（不查询额度）”。', 'BROWSER_HEADLESS');
+  }
   if (!chromium) {
     try { ({ chromium } = await import('playwright')); }
     catch { throw new CtyunError('浏览器登录组件未安装，请在插件目录运行 npm install 和 npm run browser:install', 'BROWSER'); }
@@ -27,7 +33,7 @@ export async function browserLogin({ state, deviceCode, chromium, timeout = 300_
     for (const options of [{ channel: 'chrome', headless: false }, { headless: false }]) {
       try { browser = await chromium.launch(options); break; } catch { /* Try the next installed browser. */ }
     }
-    if (!browser) throw new CtyunError('无法启动专用登录窗口，请安装 Chrome 或在插件目录运行 npm run browser:install', 'BROWSER');
+    if (!browser) throw new CtyunError('无法启动专用登录窗口。桌面环境请安装 Chrome 或在插件目录运行 npm run browser:install；无桌面服务器或 Docker 请使用“账号密码登录”并选择不保存密码。', 'BROWSER');
     const context = await browser.newContext();
     const initial = sessionFactory?.() || new CtyunSession({ state, deviceCode });
     const saved = initial.jar.serializeSync().cookies;

@@ -51,6 +51,7 @@ try {
   assert.equal(provider?.name, '天翼云 Coding Plan');
   assert.equal(provider.methods.length, 3);
   assert.equal(provider.methods[0].label, '仅 API Key（不查询额度）');
+  assert.equal(provider.methods[2].label, '账号密码登录');
   assert.equal(provider.icon, manifest.magpie.icon);
   assert.ok(provider.icon.startsWith('data:image/x-icon;base64,'));
   const findModel = (value, id) => {
@@ -74,6 +75,14 @@ try {
   const secret = await rpc('prompt', { provider: 'ctyun-coding-plan', method: 2, inputs: { account_name: 'fixture' } });
   assert.equal(secret.prompt.key, 'api_key');
   assert.equal(secret.prompt.type, 'password');
+  const answered = { account_name: 'fixture', api_key: 'fixture-key', plan_id: '', username: 'fixture-user' };
+  const save = await rpc('prompt', { provider: 'ctyun-coding-plan', method: 2, inputs: answered });
+  assert.equal(save.prompt.key, 'save_password');
+  assert.equal(save.prompt.type, 'select');
+  assert.deepEqual(save.prompt.options.map(o => o.value), ['no', 'yes']);
+  const password = await rpc('prompt', { provider: 'ctyun-coding-plan', method: 2, inputs: { ...answered, save_password: 'no' } });
+  assert.equal(password.prompt.key, 'password');
+  assert.equal(password.prompt.type, 'password');
   console.log(JSON.stringify({ magpieHostLoad: 'ok', provider: 'ctyun-coding-plan', displayName: provider.name, icon: 'embedded official favicon', loginMethods: 3, secretPrompt: 'masked', reasoningVariants: 'ok' }));
 } finally {
   child.stdin.end(); child.kill();

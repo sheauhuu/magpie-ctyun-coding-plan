@@ -58,7 +58,7 @@ export class CtyunSession {
     let url = allowedURL(address);
     let data = body === undefined ? undefined : form ? new URLSearchParams(body).toString() : JSON.stringify(body);
     for (let i = 0; i < 12; i++) {
-      const headers = new Headers({ Accept: 'application/json, text/html', 'User-Agent': 'magpie-ctyun-coding-plan/0.2.0' });
+      const headers = new Headers({ Accept: 'application/json, text/html', 'User-Agent': 'magpie-ctyun-coding-plan/0.3.0' });
       const cookie = await this.jar.getCookieString(url.href);
       if (cookie) headers.set('Cookie', cookie);
       if (data !== undefined) {

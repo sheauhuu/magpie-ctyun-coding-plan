@@ -9,13 +9,13 @@ export class CredentialStore {
     try {
       const { Entry } = await import('@napi-rs/keyring');
       return new Entry(SERVICE, id, process.platform === 'linux' ? { linux: { store: 'secret-service' } } : undefined);
-    } catch { throw new CtyunError('无法使用系统凭据库；请启用钥匙串/凭据管理器，或选择浏览器登录', 'KEYRING'); }
+    } catch { throw new CtyunError('无法使用系统凭据库；请启用钥匙串/凭据管理器，或在“账号密码登录”中选择不保存密码', 'KEYRING'); }
   }
   async set(id, credentials) {
     try { (await this.entry(id)).setPassword(JSON.stringify(credentials)); }
     catch (error) {
       if (error instanceof CtyunError) throw error;
-      throw new CtyunError('系统凭据库拒绝保存账号密码，请选择浏览器登录', 'KEYRING');
+      throw new CtyunError('系统凭据库拒绝保存账号密码，请在“账号密码登录”中选择不保存密码', 'KEYRING');
     }
   }
   async get(id) {

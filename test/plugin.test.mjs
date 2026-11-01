@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createPlugin, PROVIDER, SessionManager, savedAuth } from '../src/plugin.mjs';
 import { CtyunSession, APP, BASE, AuthError } from '../src/session.mjs';
 import { fakePortal, MemoryCredentials } from './fixtures.mjs';
+import { CredentialStore } from '../src/credentials.mjs';
 
 async function fixture() {
   const fake = fakePortal();
@@ -15,7 +16,7 @@ async function fixture() {
     setAuth: value => { auth = structuredClone(value); } };
 }
 async function login(f) {
-  const inputs = { account_name: 'test-account', api_key: 'test-api-key', plan_id: '', username: 'test-user', password: 'test-password' };
+  const inputs = { account_name: 'test-account', api_key: 'test-api-key', plan_id: '', save_password: 'yes', username: 'test-user', password: 'test-password' };
   const action = await f.plugin.auth.methods[2].authorize(inputs);
   const result = await action.callback();
   assert.equal(result.type, 'success');
@@ -62,6 +63,125 @@ test('API-key-only setup validates required inputs without starting login', asyn
   }
   assert.equal(f.fake.calls.password, 0);
   assert.equal(f.credentials.entries.size, 0);
+});
+
+test('three entry points keep a yes/no save choice before the password and reject unknown choices', async () => {
+  const f = await fixture();
+  assert.equal(f.plugin.auth.methods.length, 3);
+  const method = f.plugin.auth.methods[2];
+  assert.equal(method.label, '账号密码登录');
+  assert.deepEqual(method.prompts.slice(-3).map(p => p.key), ['username', 'save_password', 'password']);
+  const choice = method.prompts.find(p => p.key === 'save_password');
+  assert.equal(choice.type, 'select');
+  assert.deepEqual(choice.options.map(o => o.value), ['no', 'yes']);
+  assert.equal(choice.validate('no'), undefined);
+  assert.equal(choice.validate('yes'), undefined);
+  assert.ok(choice.validate('invalid'));
+  const inputs = { account_name: 'fixture', api_key: 'fixture-key', username: 'fixture-user', password: 'fixture-password', save_password: 'invalid' };
+  const result = await (await method.authorize(inputs)).callback();
+  assert.equal(result.type, 'failed');
+  assert.equal(inputs.password, '');
+  assert.equal(f.fake.calls.password, 0);
+  assert.equal(f.credentials.entries.size, 0);
+});
+
+test('password-only login works without a browser or credential store and renews through IAM', async () => {
+  const fake = fakePortal();
+  const unexpected = () => { throw new Error('credential store or browser was accessed'); };
+  const make = options => new CtyunSession({ ...options, fetchImpl: fake.fetchImpl });
+  const plugin = await createPlugin({ client: {} }, { sessionFactory: make,
+    credentials: new Proxy({}, { get: unexpected }), browserLogin: unexpected });
+  const inputs = { account_name: 'headless-fixture', api_key: 'fixture-key', username: 'fixture-user', password: 'fixture-password' };
+  const action = await plugin.auth.methods[2].authorize(inputs);
+  const result = await action.callback();
+  assert.equal(result.type, 'success');
+  assert.equal(inputs.password, '');
+  assert.equal(result.ctyun.mode, 'password-session');
+  assert.equal(result.ctyun.credentialRef, undefined);
+  assert.equal(JSON.stringify(result).includes('fixture-password'), false);
+  assert.equal(JSON.stringify(result).includes('fixture-user'), false);
+  assert.ok(JSON.parse(result.refresh).cookies.length > 0);
+  let auth = { ...result, type: 'oauth' };
+  assert.equal((await plugin.auth.usage(async () => auth)).windows.length, 3);
+
+  // Lose the app cookies but keep IAM: renew without asking for a password.
+  const session = make({ state: JSON.parse(result.refresh) });
+  for (const c of session.jar.getCookiesSync(APP)) if (c.key.startsWith('YL-')) await session.jar.store.removeCookie(c.domain, c.path, c.key);
+  auth = { ...auth, refresh: JSON.stringify(session.state()) };
+  const before = fake.calls.ticket;
+  assert.equal((await plugin.auth.usage(async () => auth)).windows.length, 3);
+  assert.equal(fake.calls.ticket, before + 1);
+  assert.equal(fake.calls.password, 1);
+
+  // With IAM gone too, report reauthentication and leave inference available.
+  auth = { ...auth, refresh: JSON.stringify(make().state()) };
+  const quota = await plugin.auth.usage(async () => auth);
+  assert.ok(quota.error);
+  assert.equal(quota.signIn, 'kept');
+  assert.equal(fake.calls.password, 1);
+  assert.equal((await plugin.auth.loader(async () => auth)).apiKey, 'fixture-key');
+});
+
+test('password-only login clears input and preserves existing saved credentials when it fails', async () => {
+  for (const challenge of ['captcha', 'sms']) {
+    const f = await fixture();
+    await f.credentials.set('existing-fixture', { username: 'existing-user', password: 'existing-password' });
+    const before = structuredClone([...f.credentials.entries]);
+    f.fake.setChallenge(challenge);
+    const inputs = { account_name: 'fixture', api_key: 'fixture-key', username: 'fixture-user', password: 'fixture-password' };
+    const action = await f.plugin.auth.methods[2].authorize(inputs);
+    const result = await action.callback();
+    assert.equal(result.type, 'failed');
+    assert.match(result.error, /验证码|短信/);
+    assert.equal(inputs.password, '');
+    assert.deepEqual([...f.credentials.entries], before);
+    assert.equal(await f.getAuth(), undefined);
+  }
+});
+
+test('unavailable keyring points to password-only login, which succeeds without retrying the keyring', async () => {
+  const f = await fixture();
+  const credentials = new CredentialStore();
+  let attempts = 0;
+  credentials.entry = async () => { attempts++; throw new Error('fixture-private-keyring-details'); };
+  const plugin = await createPlugin({ client: f.client }, { sessionFactory: f.make, credentials });
+  for (const save of ['yes', 'no']) {
+    const inputs = { account_name: 'fixture', api_key: 'fixture-key', username: 'fixture-user', password: 'fixture-password' };
+    inputs.save_password = save;
+    const result = await (await plugin.auth.methods[2].authorize(inputs)).callback();
+    assert.equal(inputs.password, '');
+    if (save === 'yes') {
+      assert.equal(result.type, 'failed');
+      assert.match(result.error, /账号密码登录.*不保存密码/);
+      assert.equal(result.error.includes('fixture-private-keyring-details'), false);
+    } else {
+      assert.equal(result.type, 'success');
+      assert.equal(result.ctyun.credentialRef, undefined);
+    }
+  }
+  assert.equal(attempts, 1);
+});
+
+test('switching a saved account to no-save leaves its old credentials unchanged and unused', async () => {
+  const f = await fixture();
+  await login(f);
+  await f.plugin.auth.usage(f.getAuth);
+  const oldEntries = structuredClone([...f.credentials.entries]);
+  let reads = 0;
+  const get = f.credentials.get.bind(f.credentials);
+  f.credentials.get = async ref => { reads++; return get(ref); };
+  const inputs = { account_name: 'test-account', api_key: 'test-api-key', username: 'test-user', password: 'test-password', save_password: 'no' };
+  const result = await (await f.plugin.auth.methods[2].authorize(inputs)).callback();
+  assert.equal(result.type, 'success');
+  assert.equal(result.ctyun.mode, 'password-session');
+  assert.equal(result.ctyun.credentialRef, undefined);
+  assert.deepEqual([...f.credentials.entries], oldEntries);
+  f.setAuth({ ...result, type: 'oauth', refresh: JSON.stringify(f.make().state()) });
+  const logins = f.fake.calls.password;
+  assert.ok((await f.plugin.auth.usage(f.getAuth)).error);
+  assert.equal(f.fake.calls.password, logins);
+  assert.equal(reads, 0);
+  assert.deepEqual([...f.credentials.entries], oldEntries);
 });
 
 test('an existing loader does not reuse the API key after account removal', async () => {

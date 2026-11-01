@@ -40,3 +40,25 @@ test('manual browser close cancels login and cleans up', async () => {
   await assert.rejects(browserLogin({ chromium }), { code: 'CANCELLED' });
   assert.equal(cleaned, true);
 });
+
+test('headless Linux reports the supported login alternatives before loading a browser', async () => {
+  await assert.rejects(browserLogin({ platform: 'linux', env: {} }), error => {
+    assert.equal(error.code, 'BROWSER_HEADLESS');
+    assert.match(error.message, /账号密码登录.*不保存密码/);
+    assert.match(error.message, /仅 API Key/);
+    assert.equal(error.message.includes('browser:install'), false);
+    return true;
+  });
+});
+
+test('browser launch failure explains both desktop installation and headless login without leaking driver errors', async () => {
+  let attempts = 0;
+  const chromium = { launch: async () => { attempts++; throw new Error('fixture-private-driver-details'); } };
+  await assert.rejects(browserLogin({ chromium }), error => {
+    assert.equal(error.code, 'BROWSER');
+    assert.match(error.message, /账号密码登录.*不保存密码/);
+    assert.equal(error.message.includes('fixture-private-driver-details'), false);
+    return true;
+  });
+  assert.equal(attempts, 2);
+});
